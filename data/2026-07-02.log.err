@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "D:\바이브자료\센서타워\scripts\export-market-radar-static-data.py", line 31, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "D:\바이브자료\센서타워\scripts\export-market-radar-static-data.py", line 21, in main
+    bundle = collect_snapshot(args.api_base, as_of, today)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\바이브자료\센서타워\backend\src\market_radar\share_html\exporter.py", line 2414, in collect_snapshot
+    sanitized = sanitize_dashboard(payload, keys)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\바이브자료\센서타워\backend\src\market_radar\share_html\exporter.py", line 2238, in sanitize_dashboard
+    raise SnapshotContractError("meta.as_of cannot follow meta.requested_as_of")
+market_radar.share_html.exporter.SnapshotContractError: meta.as_of cannot follow meta.requested_as_of
