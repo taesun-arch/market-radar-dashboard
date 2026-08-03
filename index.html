@@ -4077,6 +4077,7 @@ h4 {
   const EARLY_REASONS = new Set([
     "consecutive_growth",
     "sustained_growth",
+    "initial_acceleration",
     "initial_high_downloads",
     "first_seen_consecutive_growth",
     "first_seen_sustained_growth",
@@ -4406,6 +4407,7 @@ h4 {
         "reasons",
         "consecutive_growth",
         "sustained_growth",
+        "initial_acceleration",
         "initial_downloads",
         "market_comparison",
         "recommendation_floor",
@@ -4441,6 +4443,8 @@ h4 {
         isGrowthEvidence(value.consecutive_growth, meta.requested_as_of)) &&
       (value.sustained_growth === null ||
         isGrowthEvidence(value.sustained_growth, meta.requested_as_of)) &&
+      (value.initial_acceleration === null ||
+        isGrowthEvidence(value.initial_acceleration, meta.requested_as_of)) &&
       (value.initial_downloads === null ||
         isInitialEvidence(value.initial_downloads, meta.requested_as_of)) &&
       Array.isArray(value.market_comparison) &&
@@ -4480,9 +4484,11 @@ h4 {
     const consecutiveAnchor = expectedGrowthAnchor(reasons, "consecutive");
     const sustainedAnchor = expectedGrowthAnchor(reasons, "sustained");
     const hasInitial = reasons.includes("initial_high_downloads");
+    const hasInitialAcceleration = reasons.includes("initial_acceleration");
     if (
       (consecutiveAnchor === null) !== (value.consecutive_growth === null) ||
       (sustainedAnchor === null) !== (value.sustained_growth === null) ||
+      hasInitialAcceleration !== (value.initial_acceleration !== null) ||
       (hasInitial && value.initial_downloads === null)
     ) {
       return false;
@@ -4610,6 +4616,32 @@ h4 {
     ) {
       return false;
     }
+    if (value.initial_acceleration !== null) {
+      const acceleration = value.initial_acceleration;
+      const points = exactIntervalPoints(acceleration, value.daily_metrics);
+      const downloads = points === null ? [] : points.map((point) => point.downloads);
+      if (
+        acceleration.anchor !== "verified_release" ||
+        selectedReleaseDate === null ||
+        dateDaysBetween(selectedReleaseDate, acceleration.interval_start) < 1 ||
+        dateDaysBetween(selectedReleaseDate, acceleration.interval_end) > 14 ||
+        acceleration.observed_days !== 4 ||
+        acceleration.total_transitions !== 3 ||
+        acceleration.positive_transitions !== 3 ||
+        dateDaysBetween(acceleration.interval_start, acceleration.interval_end) !== 3 ||
+        points === null ||
+        downloads.length !== 4 ||
+        Math.min(...downloads) < 1000 ||
+        downloads.slice(1).some((value, index) => value <= downloads[index]) ||
+        acceleration.first_downloads !== downloads[0] ||
+        acceleration.latest_downloads !== downloads[3] ||
+        acceleration.first_three_day_average !== roundedAverage(downloads.slice(0, 3)) ||
+        acceleration.previous_three_day_average !== null ||
+        acceleration.latest_three_day_average !== roundedAverage(downloads.slice(-3))
+      ) {
+        return false;
+      }
+    }
     const hasBlockingExpansion = (evidence) =>
       evidence.metric_scope === "unified" &&
       value.release_evidence.some(
@@ -4624,7 +4656,9 @@ h4 {
       (value.consecutive_growth !== null &&
         hasBlockingExpansion(value.consecutive_growth)) ||
       (value.sustained_growth !== null &&
-        hasBlockingExpansion(value.sustained_growth))
+        hasBlockingExpansion(value.sustained_growth)) ||
+      (value.initial_acceleration !== null &&
+        hasBlockingExpansion(value.initial_acceleration))
     ) {
       return false;
     }
@@ -4681,6 +4715,7 @@ h4 {
     const derivedSignalDates = [
       value.consecutive_growth?.interval_end,
       value.sustained_growth?.interval_end,
+      value.initial_acceleration?.interval_end,
       hasInitial && initialSignalReleaseDate !== null
         ? shiftIsoDate(initialSignalReleaseDate, 3)
         : null,
@@ -4721,6 +4756,7 @@ h4 {
     const evidenceScopes = [
       value.consecutive_growth?.metric_scope,
       value.sustained_growth?.metric_scope,
+      value.initial_acceleration?.metric_scope,
       hasInitial ? value.initial_downloads?.metric_scope : undefined,
     ].filter((scope) => scope !== undefined);
     const uniqueScopes = new Set(evidenceScopes);
@@ -5858,6 +5894,7 @@ h4 {
     return {
       consecutive_growth: "연속 상승",
       sustained_growth: "상승세 유지",
+      initial_acceleration: "출시 초기 가속",
       initial_high_downloads: "출시 초기 상위 10%",
       first_seen_consecutive_growth: "첫 발견 후 연속 상승",
       first_seen_sustained_growth: "첫 발견 후 상승세 유지",
@@ -5871,6 +5908,7 @@ h4 {
     ["resurgence", "기존작 재상승"],
     ["consecutive_growth", "연속 상승 게임"],
     ["sustained_growth", "상승세 유지 게임"],
+    ["initial_acceleration", "출시 초기 가속 게임"],
     ["initial_high_downloads", "출시 초기 게임"],
     ["discovery_growth", "발견 후 성장 게임"],
   ];
@@ -6153,6 +6191,20 @@ h4 {
           );
         });
     }
+    if (tab === "initial_acceleration") {
+      return recent
+        .filter((row) => row.reasons.includes("initial_acceleration"))
+        .sort((left, right) => {
+          const leftEvidence = left.initial_acceleration;
+          const rightEvidence = right.initial_acceleration;
+          return (
+            (rightEvidence?.latest_downloads ?? -1) -
+              (leftEvidence?.latest_downloads ?? -1) ||
+            currentEarlyDownloads(right) - currentEarlyDownloads(left) ||
+            left.page_key.localeCompare(right.page_key)
+          );
+        });
+    }
     if (tab === "initial_high_downloads") {
       return unique
         .filter((row) =>
@@ -6299,6 +6351,7 @@ h4 {
     const anchors = [
       row.consecutive_growth?.anchor,
       row.sustained_growth?.anchor,
+      row.initial_acceleration?.anchor,
       row.initial_downloads?.anchor,
     ];
     if (anchors.includes("first_seen") && row.first_seen_date) {
@@ -6366,6 +6419,11 @@ h4 {
     if (row.sustained_growth) {
       calculation.append(
         renderGrowthEvidence(row.sustained_growth, "상승세 유지"),
+      );
+    }
+    if (row.initial_acceleration) {
+      calculation.append(
+        renderGrowthEvidence(row.initial_acceleration, "출시 초기 가속"),
       );
     }
     if (row.initial_downloads) {
